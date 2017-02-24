@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/notary/client"
 	"github.com/docker/notary/storage"
 	"github.com/docker/notary/trustpinning"
@@ -12,17 +13,19 @@ import (
 
 // NewServer creates a new instance of a Client API server with a configured
 // upstream Notary Server.
-func NewServer(upstream string, serverOpts []grpc.ServerOption) (*grpc.Server, error) {
+func NewServer(upstream string, upstreamCAPath string, serverOpts []grpc.ServerOption) (*grpc.Server, error) {
 	grpcSrv := grpc.NewServer(serverOpts...)
 	srv := &Server{
-		upstream: upstream,
+		upstream:       upstream,
+		upstreamCAPath: upstreamCAPath,
 	}
 	RegisterNotaryServer(grpcSrv, srv)
 	return grpcSrv, nil
 }
 
 type Server struct {
-	upstream string
+	upstream       string
+	upstreamCAPath string
 }
 
 func (srv *Server) AddTarget(ctx context.Context, t *TargetAction) (*BasicResponse, error) {
@@ -98,12 +101,13 @@ func initializeRepo(r *client.NotaryRepository) error {
 }
 
 func (srv *Server) initRepo(gun data.GUN) (*client.NotaryRepository, error) {
+	logrus.Errorf("initializing with upstream ca file %s", srv.upstreamCAPath)
 	rt, err := utils.GetReadOnlyAuthTransport(
 		srv.upstream,
 		[]string{gun.String()},
 		"",
 		"",
-		"/fixtures/root-ca.crt",
+		srv.upstreamCAPath,
 	)
 	if err != nil {
 		return nil, err
